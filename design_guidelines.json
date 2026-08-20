@@ -1,0 +1,60 @@
+{
+  "app_type": "dashboard",
+  "emotional_tone": "Grounded, precise, trusted organic retail",
+  "typography": {
+    "heading": "Plus Jakarta Sans, sans-serif",
+    "body": "Inter, sans-serif",
+    "mono": "JetBrains Mono, monospace"
+  },
+  "colors": {
+    "primary": "#16a34a",
+    "primary_foreground": "#ffffff",
+    "background": "#f8fafc",
+    "surface": "#ffffff",
+    "border": "#e2e8f0",
+    "text": "#0f172a",
+    "text_muted": "#64748b",
+    "accent": "#f59e0b",
+    "danger": "#ef4444"
+  },
+  "visual_enhancers": {
+    "border_radius": "8px",
+    "shadow": "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)",
+    "glassmorphism": "backdrop-blur-xl bg-white/80 border border-white/20"
+  },
+  "grids": {
+    "dashboard_grid": "grid grid-cols-1 md:grid-cols-4 lg:grid-cols-12 gap-6"
+  },
+  "layouts": {
+    "sidebar": "w-64 fixed inset-y-0 left-0 bg-slate-900 text-white z-40 flex flex-col",
+    "main_content": "md:pl-64 flex flex-col min-h-screen"
+  },
+  "motion": {
+    "transition": "transition-all duration-200 ease-in-out",
+    "hover_lift": "hover:-translate-y-0.5 hover:shadow-md"
+  },
+  "accessibility": {
+    "wcag_compliance": "AA minimum, high contrast ratios on buttons and badges",
+    "focus_states": "focus:ring-2 focus:ring-green-500 focus:outline-none"
+  },
+  "media": {},
+  "image_urls": [
+    {
+      "category": "grocery_shelves",
+      "description": "Fresh produce grocery shelves",
+      "url": "https://images.unsplash.com/photo-1542838132-92c53300491e?crop=entropy&cs=srgb&fm=jpg&q=85"
+    },
+    {
+      "category": "pos_terminal",
+      "description": "POS checkout and receipt terminal",
+      "url": "https://images.unsplash.com/photo-1594025741471-7710d7249113?crop=entropy&cs=srgb&fm=jpg&q=85"
+    }
+  ],
+  "instructions_to_main_agent": "Ensure all interactive elements have data-testid attributes. Implement full product catalog, sales recording, purchases recording with payment proof image upload, stock tracking, and cash flow overview. Use Tailwind CSS and Shadcn primitives.",
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "You MUST NOT apply universal transition (transition: all).",
+    "All interactive elements MUST include data-testid attribute.",
+    "Do not use complete transparent background on headers or overlays.",
+    "Maintain high contrast ratios and accessible typography."
+  ]
+}
