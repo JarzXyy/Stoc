@@ -49,10 +49,11 @@ Later requests: Transaction History tab, Weekly Reports tab (copy-as-text sharin
 - Stock tab: per-product quantity input to increase stock (POST /api/products/{id}/stock).
 - Currency switched to IDR everywhere (frontend formatters, report share_text, seed prices migrated in DB, old dollar-scale test transactions removed).
 - Backend date validation (400 on malformed dates).
+- Stock tab: "Add product" modal to register new store items (name, category, unit, starting stock, Rp prices, low-stock alert level) — self-tested end-to-end.
 - Tested: iteration_4 — 31/31 backend pytest, 100% frontend flows passed; low-priority fixes applied and self-verified after.
 
 ## Prioritized backlog
-- P0: Add product creation/editing/deletion controls in the UI.
+- P0: Product editing/deletion controls in the UI (creation done).
 - P1: Proof-image gallery page with download.
 - P2: Supplier records and purchase invoice numbers.
 - P2: Pagination on transaction history for large volumes.

@@ -35,3 +35,5 @@
 .proof-thumb.broken::after{content:"–"}
 .filter-search,.filter-select,.filter-date input{height:38px}
 @media(max-width:680px){.filter-date{flex:1;min-width:44%}.filter-date input{width:100%}.filter-select{flex:1}}
+.stock-head-actions{display:flex;align-items:center;gap:10px}
+@media(max-width:680px){.stock-head-actions{margin-top:16px;flex-wrap:wrap}.stock-head-actions .btn{width:100%}}
