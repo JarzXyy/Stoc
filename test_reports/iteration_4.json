@@ -1,0 +1,48 @@
+{
+  "summary": "Full backend + frontend regression of the new GreenBasket features (transaction filters, weekly report, stock top-up, IDR currency). Backend: 31 pytest tests across /app/backend/tests (filters by type/q/date_from/date_to individually + combined, weekly report structure/totals/share_text/week_offset, stock top-up happy path/persistence/400/404/422, sale-purchase stock regression, oversell rejection, proof_image persistence) — all 31 passed. Frontend (desktop 1920 + mobile 390): sidebar tab switching (Overview/Stock/History/Reports), stock add flow (prod-milk 82 -> 86 with success toast; empty qty -> 'Enter how many units to add' error toast), History search/type/date filters + clear + empty state, proof thumbnail -> proof-modal open/close, Reports week label 'Aug 17 - Aug 23, 2026 - this week', prev/next week nav (next disabled at current week), Rp totals, share preview, copy button toast, and end-to-end record-sale with proof attach (cash flow Rp -5.992 -> Rp 12.008, new row appears newest-first in History). Currency sweep found no '$' anywhere; all values render as 'Rp X.XXX' (id-ID).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "DELETE (missing)", "issue": "No delete endpoints for products/transactions, so test-created data cannot be cleaned via the API. I cleaned TEST_ products/transactions directly in MongoDB after testing (5 seeded products remain, transactions collection is empty)."},
+      {"endpoint": "GET /api/transactions", "issue": "date_from/date_to rely on lexicographic string comparison of ISO created_at; works today but will break/return wrong rows if any transaction is ever stored with a non-UTC-offset or non-ISO created_at. Consider storing datetimes or validating the YYYY-MM-DD format (currently an invalid date like '2026-13-99' is passed straight to the regex-free range query and silently returns [] instead of 400)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "HistoryView proof thumbnail / proof-modal", "issue": "When a stored proof_image data URL is unrenderable, the <img> shows the browser broken-image icon plus alt text (console: net::ERR_INVALID_URL) with no fallback placeholder. Reproduced with tiny synthetic PNG data URLs; real uploads render fine. Suggest an onError fallback.", "selector": "[data-testid=\"view-proof-button\"] img, .proof-full", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "History filter bar", "issues": ["Date inputs use the native browser date picker (mm/dd/yyyy) instead of a styled calendar component, and their 'From'/'To' labels push the inputs out of vertical alignment with the search box and type select", "On mobile (390px) the 'To' date input is noticeably narrower than 'From' and wraps to its own line, looking unbalanced"]},
+      {"screen": "History table (mobile)", "issues": ["Table requires horizontal scroll with no visual affordance/shadow hint that more columns (total, note, proof) exist off-screen"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_history_reports.py",
+    "/app/backend/tests/test_stock.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results_iteration4.xml"
+  ],
+  "action_items": [
+    "Optional: add onError fallback for proof images so unrenderable data URLs show a placeholder instead of a broken-image icon",
+    "Optional: validate date_from/date_to format on GET /api/transactions (return 400 on malformed dates)",
+    "Optional design polish: align History date filters with the search/select row and use a styled date picker; balance the mobile filter layout",
+    "Optional: expose DELETE /api/products/{id} (and transactions) so test/demo data can be cleaned without direct DB access"
+  ],
+  "critical_code_review_comments": [
+    "App.js renders the entire sidebar, overview section and transaction modal as single ~1000-character JSX lines (lines 27-38). It is functional but effectively unreviewable/unmaintainable — split the Sidebar, StatGrid, InventoryPanel and TransactionModal into separate components like the already-extracted History/Reports/Stock views.",
+    "The money formatter `Rp ${n.toLocaleString('id-ID')}` is duplicated verbatim in App.js, HistoryView.jsx and ReportsView.jsx — extract to src/lib/format.js to keep currency behaviour consistent.",
+    "server.py weekly_report duplicates the currency formatting logic that the frontend also owns; fine for share_text, but the `idr` lambda should be a module-level helper for reuse/testing.",
+    "No pagination on GET /api/transactions (hard-coded to_list(1000)) and the History view fetches everything on every keystroke (debounced 250ms) — will degrade once the store has real volume."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_history_reports.py"
+  ],
+  "success_rate": {"backend": "100% (31/31 pytest)", "frontend": "100% of tested flows passed"},
+  "seed_data_creation": "Created TEST_ products/transactions during testing (IDR-scale prices) and deleted them afterwards via MongoDB (4 products, 6 transactions removed). Note: seeded product stock levels are now higher than the original seed (e.g. Fresh Milk stock inflated by stock-top-up and purchase tests) — cosmetic only.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "N/A - app has no auth",
+  "context_for_next_testing_agent": "Backend suites live in /app/backend/tests (backend_test.py, test_stock.py, test_history_reports.py) and are pytest-based; pytest.ini runs -n 2 --dist loadscope. test_history_reports.py was updated this iteration to assert IDR ('Rp 1.234') share_text formatting and IDR-scale seed prices (previous version still asserted '$' amounts). Transactions collection was emptied at the end of this iteration, so History/Reports will show empty states until new transactions are created. There is no API delete endpoint; clean test data via MONGO_URL/DB_NAME from /app/backend/.env.",
+  "rca_of_the_issue": "Only pre-existing test-code drift was found: test_history_reports.py::test_share_text_content asserted dollar-formatted totals from before the IDR migration and would have failed. Fixed the assertions to the new 'Rp X.XXX' format (and IDR-scale seed prices); no application defects were required to make tests pass."
+}

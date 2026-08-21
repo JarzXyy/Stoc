@@ -8,7 +8,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Literal
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 
 ROOT_DIR = Path(__file__).parent
@@ -76,14 +76,17 @@ class TransactionCreate(BaseModel):
     note: str = ""
     proof_image: Optional[str] = None
 
+class StockAdjust(BaseModel):
+    quantity: int
+
 async def seed_products():
     if await db.products.count_documents({}) == 0:
         await db.products.insert_many([
-            {"id": "prod-milk", "name": "Fresh Milk", "category": "Dairy", "unit": "bottle", "stock": 24, "reorder_level": 8, "cost_price": 1.2, "selling_price": 1.8},
-            {"id": "prod-bread", "name": "Whole Wheat Bread", "category": "Bakery", "unit": "loaf", "stock": 7, "reorder_level": 10, "cost_price": 1.1, "selling_price": 2.2},
-            {"id": "prod-apples", "name": "Red Apples", "category": "Produce", "unit": "kg", "stock": 42, "reorder_level": 12, "cost_price": 2.0, "selling_price": 3.5},
-            {"id": "prod-rice", "name": "Basmati Rice", "category": "Pantry", "unit": "bag", "stock": 15, "reorder_level": 6, "cost_price": 8.5, "selling_price": 12.0},
-            {"id": "prod-eggs", "name": "Farm Eggs", "category": "Dairy", "unit": "dozen", "stock": 5, "reorder_level": 8, "cost_price": 2.4, "selling_price": 3.6},
+            {"id": "prod-milk", "name": "Fresh Milk", "category": "Dairy", "unit": "bottle", "stock": 24, "reorder_level": 8, "cost_price": 12000, "selling_price": 18000},
+            {"id": "prod-bread", "name": "Whole Wheat Bread", "category": "Bakery", "unit": "loaf", "stock": 7, "reorder_level": 10, "cost_price": 11000, "selling_price": 22000},
+            {"id": "prod-apples", "name": "Red Apples", "category": "Produce", "unit": "kg", "stock": 42, "reorder_level": 12, "cost_price": 20000, "selling_price": 35000},
+            {"id": "prod-rice", "name": "Basmati Rice", "category": "Pantry", "unit": "bag", "stock": 15, "reorder_level": 6, "cost_price": 85000, "selling_price": 120000},
+            {"id": "prod-eggs", "name": "Farm Eggs", "category": "Dairy", "unit": "dozen", "stock": 5, "reorder_level": 8, "cost_price": 24000, "selling_price": 36000},
         ])
 
 # Add your routes to the router instead of directly to app
@@ -102,9 +105,37 @@ async def create_product(input: ProductCreate):
     await db.products.insert_one(product.model_dump())
     return product
 
+@api_router.post("/products/{product_id}/stock", response_model=Product)
+async def add_stock(product_id: str, input: StockAdjust):
+    if input.quantity <= 0:
+        raise HTTPException(400, "Quantity must be positive")
+    product = await db.products.find_one({"id": product_id}, {"_id": 0})
+    if not product:
+        raise HTTPException(404, "Product not found")
+    await db.products.update_one({"id": product_id}, {"$inc": {"stock": input.quantity}})
+    product["stock"] += input.quantity
+    return product
+
 @api_router.get("/transactions", response_model=List[Transaction])
-async def get_transactions():
-    return await db.transactions.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+async def get_transactions(type: Optional[str] = None, q: Optional[str] = None, date_from: Optional[str] = None, date_to: Optional[str] = None):
+    def valid_date(s):
+        try:
+            return datetime.strptime(s, "%Y-%m-%d").date().isoformat()
+        except ValueError:
+            raise HTTPException(400, "Dates must be in YYYY-MM-DD format")
+    query = {}
+    if type in ("sale", "purchase"):
+        query["type"] = type
+    if q:
+        query["product_name"] = {"$regex": q, "$options": "i"}
+    date_range = {}
+    if date_from:
+        date_range["$gte"] = valid_date(date_from)
+    if date_to:
+        date_range["$lte"] = valid_date(date_to) + "T23:59:59.999999+00:00"
+    if date_range:
+        query["created_at"] = date_range
+    return await db.transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
 
 @api_router.post("/transactions", response_model=Transaction)
 async def create_transaction(input: TransactionCreate):
@@ -132,6 +163,57 @@ async def get_summary():
     today = datetime.now(timezone.utc).date().isoformat()
     today_sales = [t for t in transactions if t["type"] == "sale" and t["created_at"].startswith(today)]
     return {"products": len(products), "stock_units": sum(p["stock"] for p in products), "sales": sales, "purchases": purchases, "sales_today": sum(t["total"] for t in today_sales), "sales_today_count": len(today_sales), "cash_flow": sales - purchases, "low_stock": sum(1 for p in products if p["stock"] <= p["reorder_level"])}
+
+@api_router.get("/reports/weekly")
+async def weekly_report(week_offset: int = 0):
+    today = datetime.now(timezone.utc).date()
+    week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
+    week_end = week_start + timedelta(days=6)
+    txs = await db.transactions.find(
+        {"created_at": {"$gte": week_start.isoformat(), "$lte": week_end.isoformat() + "T23:59:59.999999+00:00"}},
+        {"_id": 0},
+    ).to_list(5000)
+    sales = [t for t in txs if t["type"] == "sale"]
+    purchases = [t for t in txs if t["type"] == "purchase"]
+    sales_total = sum(t["total"] for t in sales)
+    purchases_total = sum(t["total"] for t in purchases)
+    movement = {}
+    for t in txs:
+        m = movement.setdefault(t["product_name"], {"name": t["product_name"], "sold": 0, "purchased": 0, "sales_value": 0.0, "purchases_value": 0.0})
+        if t["type"] == "sale":
+            m["sold"] += t["quantity"]
+            m["sales_value"] += t["total"]
+        else:
+            m["purchased"] += t["quantity"]
+            m["purchases_value"] += t["total"]
+    products = sorted(movement.values(), key=lambda m: m["sales_value"] + m["purchases_value"], reverse=True)
+    label = f"{week_start.strftime('%b %d')} – {week_end.strftime('%b %d, %Y')}"
+    cash_flow = sales_total - purchases_total
+    idr = lambda v: "Rp " + f"{v:,.0f}".replace(",", ".")
+    lines = [
+        f"GreenBasket weekly report ({label})",
+        f"Sales: {idr(sales_total)} ({len(sales)} transactions)",
+        f"Purchases: {idr(purchases_total)} ({len(purchases)} transactions)",
+        f"Cash flow: {'+' if cash_flow >= 0 else '-'}{idr(abs(cash_flow))}",
+    ]
+    if products:
+        lines.append("Stock movement:")
+        for m in products:
+            lines.append(f"- {m['name']}: {m['sold']} sold, {m['purchased']} purchased")
+    else:
+        lines.append("No stock movement this week.")
+    return {
+        "week_start": week_start.isoformat(),
+        "week_end": week_end.isoformat(),
+        "label": label,
+        "sales_total": sales_total,
+        "purchases_total": purchases_total,
+        "cash_flow": cash_flow,
+        "sales_count": len(sales),
+        "purchases_count": len(purchases),
+        "products": products,
+        "share_text": "\n".join(lines),
+    }
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
